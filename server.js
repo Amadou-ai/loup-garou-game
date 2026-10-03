@@ -32,6 +32,9 @@ const io = new Server(server, {
 // code de room -> { room: Room, engine: GameStateMachine }
 const rooms = new Map();
 
+// Longueur maximale d'un message de nuit (chat entre rôles réveillés).
+const MAX_NIGHT_MESSAGE_LEN = 500;
+
 /**
  * Fermeture centralisée d'une room (volontaire ou accidentelle).
  * Garantie : après un close, il ne reste RIEN côté serveur pour les joueurs
@@ -144,9 +147,10 @@ function refresh(code) {
 }
 
 io.on("connection", (socket) => {
-  // après chaque évènement (hors WebRTC), on resynchronise MJ + audio
+  // après chaque évènement (hors WebRTC et chat de nuit, qui n'ont pas besoin
+  // de resynchroniser l'état), on resynchronise MJ + audio
   socket.onAny((event) => {
-    if (event.startsWith("webrtc")) return;
+    if (event.startsWith("webrtc") || event === "night_chat") return;
     setImmediate(() => socket.data.roomCode && refresh(socket.data.roomCode));
   });
 
@@ -300,6 +304,44 @@ io.on("connection", (socket) => {
       });
     }
     callback?.({ ok: result.ok, error: result.error });
+  });
+
+  // ---- Chat de nuit : messages texte entre les joueurs du rôle réveillé ----
+  // Même filtrage que applyAudio() : on regarde quel rôle est actuellement
+  // réveillé (awakeRole) et on n'autorise la parole qu'aux joueurs de ce rôle.
+  // Le message part uniquement vers ces joueurs (et le MJ), jamais à la salle.
+  socket.on("night_chat", ({ text } = {}, callback) => {
+    const entry = rooms.get(socket.data.roomCode);
+    if (!entry) return callback?.({ ok: false, error: "Partie introuvable" });
+    const { room } = entry;
+
+    const awake = awakeRole(room);
+    const sender = room.players.get(socket.id);
+    if (!awake || !sender || sender.roleId !== awake.id || !sender.alive) {
+      return callback?.({ ok: false, error: "Ce n'est pas le moment de parler" });
+    }
+
+    const clean = String(text || "").trim().slice(0, MAX_NIGHT_MESSAGE_LEN);
+    if (!clean) return callback?.({ ok: false, error: "Message vide" });
+
+    // Anonymat : on ne transmet NI le nom NI l'id du joueur, seulement son rôle.
+    const payload = {
+      text: clean,
+      roleId: awake.id,
+      roleName: awake.name,
+      at: Date.now(),
+    };
+
+    // Destinataires = les AUTRES joueurs de CE rôle (le même filtre que le
+    // micro) + le MJ. L'émetteur est exclu (il affiche son message localement),
+    // ce qui évite toute fuite d'identité via son socket.
+    for (const [id, p] of room.players) {
+      if (id === socket.id) continue;
+      if (p.roleId === awake.id) io.to(id).emit("night_chat", payload);
+    }
+    io.to(room.hostSocketId).emit("night_chat", payload);
+
+    callback?.({ ok: true });
   });
 
   // ---- Le Maître du Jeu passe au jour ----

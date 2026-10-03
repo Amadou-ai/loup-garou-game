@@ -5,7 +5,6 @@ import { roleIcon } from "../roleMeta";
 
 const props = defineProps({
   player: { type: Object, required: true },
-  awake: { type: Boolean, default: false },
 });
 
 const game = useGameStore();
@@ -24,20 +23,11 @@ const dead = computed(() => !props.player.alive);
     >
       <!-- Face avant : infos joueur + contrôles -->
       <div
-        class="absolute inset-0 backface-hidden rounded-2xl p-4 flex flex-col border-2 bg-gray-900"
-        :class="awake ? 'border-indigo-400 shadow-[0_0_20px] shadow-indigo-600/60' : 'border-gray-800'"
+        class="absolute inset-0 backface-hidden rounded-2xl p-4 flex flex-col border-2 bg-gray-900 border-gray-800"
       >
-        <div class="flex items-center justify-between mb-2">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="text-2xl">👤</span>
-            <b class="truncate">{{ player.name }}</b>
-          </div>
-          <span
-            v-if="awake"
-            class="text-[10px] font-bold uppercase tracking-wider text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full"
-          >
-            réveillé
-          </span>
+        <div class="flex items-center gap-2 min-w-0 mb-2">
+          <span class="text-2xl">👤</span>
+          <b class="truncate">{{ player.name }}</b>
         </div>
 
         <div class="flex-1 flex flex-col justify-center text-sm text-gray-400 gap-1">

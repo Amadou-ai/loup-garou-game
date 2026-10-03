@@ -43,6 +43,10 @@ export const useGameStore = defineStore("game", () => {
   const audio = ref({ mic: true, listen: true });
   const selfMuted = ref(false);
   const toast = ref("");
+  // Messages de nuit échangés entre les joueurs du rôle actuellement réveillé
+  // (et copie reçue par le MJ pour qu'il suive). Anonymes : signés par le RÔLE,
+  // jamais par le nom du joueur. Vidés à chaque réveil/phase.
+  const nightMessages = ref([]); // [{ text, roleId, roleName, at, mine? }]
 
   // ---- Composition choisie par le MJ (avant création de la room) ----
   const composition = ref(null);
@@ -60,6 +64,11 @@ export const useGameStore = defineStore("game", () => {
   const others = computed(() => playerList.value.filter((p) => !p.isHost));
   const me = computed(
     () => playerList.value.find((p) => p.id === socketId.value) || { alive: true }
+  );
+  // La zone de chat de nuit n'apparaît que pendant que le rôle est réveillé :
+  // même condition que le micro (nuit + role_wake reçu), plus "être en vie".
+  const canNightChat = computed(
+    () => phase.value === "night" && awake.value && me.value.alive !== false
   );
 
   /** Écran affiché, dérivé de l'étape choisie + de la phase serveur. */
@@ -108,13 +117,18 @@ export const useGameStore = defineStore("game", () => {
     phase.value = next;
     awake.value = false;
     inspectResult.value = null;
+    nightMessages.value = []; // on repart d'une conversation vierge à chaque phase
     if (next !== "night") witchInfo.value = null;
   };
   const onRoleWake = () => {
     awake.value = true;
+    nightMessages.value = []; // nouveau rôle réveillé = nouveau fil de discussion
   };
   const onRoleSleep = () => {
     awake.value = false;
+  };
+  const onNightChat = (m) => {
+    nightMessages.value.push(m);
   };
   const onWitchInfo = (i) => {
     witchInfo.value = i;
@@ -181,6 +195,7 @@ export const useGameStore = defineStore("game", () => {
   socket.on("room_closed", onRoomClosed);
   socket.on("peer_left", onPeerLeft);
   socket.on("audio_state", onAudioState);
+  socket.on("night_chat", onNightChat);
 
   // Répercute l'état audio (mic/listen/mute manuel) sur les pistes WebRTC
   watch(
@@ -231,6 +246,7 @@ export const useGameStore = defineStore("game", () => {
     myRole.value = null;
     winner.value = null;
     awake.value = false;
+    nightMessages.value = [];
     composition.value = null;
     expectedPlayers.value = 0;
   }
@@ -298,6 +314,25 @@ export const useGameStore = defineStore("game", () => {
   // ---- Actions du joueur ----
   const nightAction = (payload) => emit("night_action", payload);
   const castVote = (targetId) => emit("cast_vote", { targetId });
+  /** Chat de nuit : envoyé uniquement aux AUTRES joueurs du rôle réveillé (+ MJ).
+   *  Anonyme : on n'affiche que le rôle. Comme le serveur n'émet pas vers
+   *  l'expéditeur, on ajoute nous-même notre message localement (marqué "mine"). */
+  function sendNightMessage(text) {
+    const clean = String(text || "").trim();
+    if (!clean) return Promise.resolve({ ok: false });
+    return emit("night_chat", { text: clean }).then((res) => {
+      if (res?.ok) {
+        nightMessages.value.push({
+          text: clean,
+          roleId: myRole.value?.id || null,
+          roleName: myRole.value?.name || "",
+          at: Date.now(),
+          mine: true,
+        });
+      }
+      return res;
+    });
+  }
   function toggleSelfMuted() {
     selfMuted.value = !selfMuted.value;
   }
@@ -345,6 +380,7 @@ export const useGameStore = defineStore("game", () => {
     audio,
     selfMuted,
     toast,
+    nightMessages,
     // getters
     isNight,
     isGM,
@@ -354,6 +390,7 @@ export const useGameStore = defineStore("game", () => {
     others,
     me,
     screen,
+    canNightChat,
     // actions
     notify,
     gotoCreate,
@@ -376,6 +413,7 @@ export const useGameStore = defineStore("game", () => {
     killPlayer,
     nightAction,
     castVote,
+    sendNightMessage,
     toggleSelfMuted,
     leaveRoom,
     closeRoom,

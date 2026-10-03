@@ -6,7 +6,8 @@ import PlayerCardGM from "./PlayerCardGM.vue";
 import { teamLabel } from "../roleMeta";
 
 const game = useGameStore();
-const { code, phase, phaseLabel, hostState, isNight, winner, selfMuted } = storeToRefs(game);
+const { code, phase, phaseLabel, hostState, isNight, winner, selfMuted, nightMessages } =
+  storeToRefs(game);
 
 const players = computed(() => hostState.value?.players || []);
 const nightRoles = computed(() => hostState.value?.nightRoles || []);
@@ -132,13 +133,32 @@ function toggleRole(roleId) {
       <p class="text-xs text-gray-500 mt-3">Seul le rôle réveillé (et toi) entendez la conversation.</p>
     </div>
 
+    <!-- Suivi MJ : murmures texte échangés par le rôle réveillé -->
+    <div
+      v-if="isNight && (awakeRole || nightMessages.length)"
+      class="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h3 class="font-bold text-white">🐾 Murmures du camp réveillé</h3>
+        <span class="text-xs text-gray-500">Visible par toi et le camp concerné</span>
+      </div>
+      <div class="max-h-48 overflow-y-auto space-y-1">
+        <p v-if="nightMessages.length === 0" class="text-gray-500 text-sm italic">
+          Aucun message pour l'instant.
+        </p>
+        <p v-for="(m, i) in nightMessages" :key="i" class="text-sm">
+          <span class="text-indigo-300 font-semibold">{{ m.roleName || "?" }}</span>
+          <span class="text-gray-200"> — {{ m.text }}</span>
+        </p>
+      </div>
+    </div>
+
     <!-- Grille des joueurs (vue globale) -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       <PlayerCardGM
         v-for="p in players"
         :key="p.id"
         :player="p"
-        :awake="awakeRole && p.roleId === awakeRole"
       />
       <div
         v-if="players.length === 0"

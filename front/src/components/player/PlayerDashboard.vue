@@ -4,6 +4,7 @@ import { storeToRefs } from "pinia";
 import { useGameStore } from "../../stores/gameStore";
 import PlayerCard from "./PlayerCard.vue";
 import NightAction from "./NightAction.vue";
+import NightChat from "./NightChat.vue";
 import VotePanel from "./VotePanel.vue";
 import { teamLabel } from "../../roleMeta";
 
@@ -90,6 +91,9 @@ function micLabel() {
 
     <!-- Action de nuit -->
     <NightAction v-if="phase === 'night'" class="mb-6" />
+
+    <!-- Chat de nuit (n'apparaît que si le rôle est réveillé) -->
+    <NightChat v-if="phase === 'night'" class="mb-6" />
 
     <!-- Vote -->
     <VotePanel v-if="phase === 'vote' && alive" class="mb-6" />

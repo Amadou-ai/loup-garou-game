@@ -85,7 +85,39 @@ front/src/
       PlayerDashboard.vue  vue joueur
       PlayerCard.vue       carte de rôle du joueur (3D flip)
       NightAction.vue      actions de nuit (loup, voyante, sorcière)
+      NightChat.vue        chat de nuit (visible seulement si le rôle est réveillé)
       VotePanel.vue        vote du village
+```
+
+## 💬 Chat de nuit (rôles réveillés)
+
+Le serveur filtre les messages texte exactement comme il filtre le micro
+(`server.js` → `applyAudio()`) : il connaît à tout instant le rôle réveillé
+(`awakeRole(room)`, c.-à-d. `getNightRoles()[room.nightRoleIndex]` pendant la
+nuit).
+
+- Le joueur envoie `night_chat` `{ text }`. Le serveur vérifie que son rôle est
+  bien le rôle **actuellement réveillé** (`awakeRole(room).id`) et qu'il est
+  vivant ; sinon le message est rejeté.
+- S'il est valide, le serveur le renvoie **uniquement aux AUTRES joueurs de ce
+  même rôle** (le même ensemble que ceux dont le micro est ouvert) **et au MJ**,
+  pour qu'il suive la conversation — jamais à toute la salle. L'émetteur est
+  exclu (il affiche son message localement), ce qui évite tout doublon.
+- **Anonymat** : le message n'est jamais signé par le nom (ni l'id) du joueur,
+  uniquement par son **rôle**. Le payload ne contient que
+  `{ text, roleId, roleName, at }`.
+- Côté front, la zone de texte (`front/src/components/player/NightChat.vue`)
+  n'apparaît que pendant que le rôle est réveillé (`phase===night && awake`),
+  donc jamais le reste du temps.
+- Le dashboard MJ ne révèle **pas** quels *joueurs* sont réveillés (aucun
+  surlignage par carte) : il ne montre que le **rôle** en cours de réveil
+  (boutons de l'ordre de réveil) et les murmures signés par rôle.
+
+Test bout-en-bout (serveur lancé) :
+
+```bash
+node test/night-chat.js
+# HTTP (sans certificats) : SERVER_URL=http://localhost:3000 node test/night-chat.js
 ```
 
 ## Modifier les règles (sans toucher au moteur de jeu)
